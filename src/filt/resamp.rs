@@ -5,16 +5,29 @@ use std::{ffi::c_void, marker::PhantomData};
 pub struct Resamp<O, H, S> {
     q: *mut c_void,
     rate: f32,
+    drop_fn: fn(&mut Resamp<O, H, S>),
     _output_type: PhantomData<O>,
     _tap_type: PhantomData<H>,
     _sample_type: PhantomData<S>,
+}
+
+impl<O, H, S> Drop for Resamp<O, H, S> {
+    fn drop(&mut self) {
+        (self.drop_fn)(self);
+    }
 }
 
 /// - input: Complex32
 /// - taps: Complex32
 /// - output: Complex32
 pub type ResampCCC = Resamp<Complex32, Complex32, Complex32>;
+/// - input: Complex32
+/// - taps: f32
+/// - output: Complex32
 pub type ResampCRC = Resamp<Complex32, f32, Complex32>;
+/// - input: Complex32
+/// - taps: f32
+/// - output: Complex32
 pub type ResampRRR = Resamp<f32, f32, f32>;
 
 #[inline(always)]
@@ -31,12 +44,19 @@ mod ccc {
     type Q = sys::resamp_cccf;
 
     impl Resamp<O, H, S> {
-        /// See [resamp_cfcf_create_default](https://liquidsdr.org/api/resamp_cfcf/#create_default).
+        fn drop_fn(&mut self) {
+            unsafe {
+                let _ = sys::resamp_cccf_destroy(self.q as Q);
+            }
+        }
+
+        /// See [resamp_cfcf_create_default](https://liquidsdr.org/api/resamp_crcf/#create_default).
         pub fn create_default(rate: f32) -> Result<Resamp<O, H, S>, String> {
             let q = unsafe { sys::resamp_cccf_create_default(rate) as *mut c_void };
             if q.is_null() {
                 return Err("error".into());
             }
+            let drop_fn = Self::drop_fn;
             let _sample_type = PhantomData;
             let _tap_type = PhantomData;
             let _output_type = PhantomData;
@@ -44,6 +64,7 @@ mod ccc {
             Ok(Self {
                 q,
                 rate,
+                drop_fn,
                 _sample_type,
                 _tap_type,
                 _output_type,
@@ -62,6 +83,7 @@ mod ccc {
             if q.is_null() {
                 return Err("error".into());
             }
+            let drop_fn = Self::drop_fn;
             let _sample_type = PhantomData;
             let _tap_type = PhantomData;
             let _output_type = PhantomData;
@@ -69,6 +91,7 @@ mod ccc {
             Ok(Self {
                 q,
                 rate,
+                drop_fn,
                 _sample_type,
                 _tap_type,
                 _output_type,
@@ -108,12 +131,19 @@ mod crc {
     type Q = sys::resamp_crcf;
 
     impl Resamp<O, H, S> {
+        fn drop_fn(&mut self) {
+            unsafe {
+                let _ = sys::resamp_crcf_destroy(self.q as Q);
+            }
+        }
+
         /// See [resamp_cfcf_create_default](https://liquidsdr.org/api/resamp_cfcf/#create_default).
         pub fn create_default(rate: f32) -> Result<Resamp<O, H, S>, String> {
             let q = unsafe { sys::resamp_crcf_create_default(rate) as *mut c_void };
             if q.is_null() {
                 return Err("error".into());
             }
+            let drop_fn = Self::drop_fn;
             let _sample_type = PhantomData;
             let _tap_type = PhantomData;
             let _output_type = PhantomData;
@@ -121,6 +151,7 @@ mod crc {
             Ok(Self {
                 q,
                 rate,
+                drop_fn,
                 _sample_type,
                 _tap_type,
                 _output_type,
@@ -139,6 +170,7 @@ mod crc {
             if q.is_null() {
                 return Err("error".into());
             }
+            let drop_fn = Self::drop_fn;
             let _sample_type = PhantomData;
             let _tap_type = PhantomData;
             let _output_type = PhantomData;
@@ -146,6 +178,7 @@ mod crc {
             Ok(Self {
                 q,
                 rate,
+                drop_fn,
                 _sample_type,
                 _tap_type,
                 _output_type,
@@ -187,12 +220,19 @@ mod rrr {
     type Q = sys::resamp_rrrf;
 
     impl Resamp<O, H, S> {
+        fn drop_fn(&mut self) {
+            unsafe {
+                let _ = sys::resamp_rrrf_destroy(self.q as Q);
+            }
+        }
+
         /// See [resamp_rrrf_create_default](https://liquidsdr.org/api/resamp_rrrf/#create_default).
         pub fn create_default(rate: f32) -> Result<Resamp<O, H, S>, String> {
             let q = unsafe { sys::resamp_rrrf_create_default(rate) as *mut c_void };
             if q.is_null() {
                 return Err("error".into());
             }
+            let drop_fn = Self::drop_fn;
             let _sample_type = PhantomData;
             let _tap_type = PhantomData;
             let _output_type = PhantomData;
@@ -200,6 +240,7 @@ mod rrr {
             Ok(Self {
                 q,
                 rate,
+                drop_fn,
                 _sample_type,
                 _tap_type,
                 _output_type,
@@ -218,6 +259,7 @@ mod rrr {
             if q.is_null() {
                 return Err("error".into());
             }
+            let drop_fn = Self::drop_fn;
             let _sample_type = PhantomData;
             let _tap_type = PhantomData;
             let _output_type = PhantomData;
@@ -225,6 +267,7 @@ mod rrr {
             Ok(Self {
                 q,
                 rate,
+                drop_fn,
                 _sample_type,
                 _tap_type,
                 _output_type,
