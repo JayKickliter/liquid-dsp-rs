@@ -1,4 +1,5 @@
-use liquid_dsp_bindings_sys as sys;
+use crate::complex::c;
+use liquid_dsp_sys as sys;
 use num_complex::Complex32;
 use std::{ffi::c_void, marker::PhantomData};
 
@@ -29,12 +30,6 @@ pub type ResampCRC = Resamp<Complex32, f32, Complex32>;
 /// - taps: f32
 /// - output: Complex32
 pub type ResampRRR = Resamp<f32, f32, f32>;
-
-#[inline(always)]
-fn c(x: Complex32) -> sys::__BindgenComplex<f32> {
-    let Complex32 { re, im } = x;
-    sys::__BindgenComplex { re, im }
-}
 
 mod ccc {
     use super::*;
