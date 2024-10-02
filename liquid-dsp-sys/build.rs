@@ -5,6 +5,7 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .clang_arg("-I/opt/homebrew/include")
+        .clang_arg("-DLIQUID_SUPPRESS_ERROR_OUTPUT")
         .header("wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()

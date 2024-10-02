@@ -1,5 +1,3 @@
-use crate::complex::c;
-use liquid_dsp_sys as sys;
 use num_complex::Complex32;
 use std::{ffi::c_void, marker::PhantomData};
 
@@ -18,276 +16,164 @@ impl<O, H, S> Drop for Resamp<O, H, S> {
     }
 }
 
-/// - input: Complex32
+/// - output: Complex32
 /// - taps: Complex32
-/// - output: Complex32
+/// - input: Complex32
 pub type ResampCCC = Resamp<Complex32, Complex32, Complex32>;
-/// - input: Complex32
-/// - taps: f32
 /// - output: Complex32
+/// - taps: f32
+/// - input: Complex32
 pub type ResampCRC = Resamp<Complex32, f32, Complex32>;
-/// - input: Complex32
+/// - output: f32
 /// - taps: f32
-/// - output: Complex32
+/// - input: f32
 pub type ResampRRR = Resamp<f32, f32, f32>;
 
-mod ccc {
-    use super::*;
-    type O = Complex32;
-    type H = Complex32;
-    type S = Complex32;
-    type Q = sys::resamp_cccf;
+macro_rules! impl_resamp(
+    (
+        mod_: $mod:ident,
+        alias: $resamp_alias:ty,
+        out: $O:ty,
+        taps: $H:ty,
+        input: $S:ty,
+        cobj: $Q:path,
+        complex_conv: $complex_conv:path,
+        create_default_fn: $create_default_fn:path,
+        create_fn: $create_fn:path,
+        destroy_fn: $destroy_fn:path,
+        exec_fn: $exec_fn:path
+    ) => {
+        mod $mod {
+            use crate::{filt::resamp::Resamp};
+            #[allow(unused_imports)]
+            use ::num_complex::Complex32;
+            use ::liquid_dsp_sys as sys;
+            use ::std::{ffi::c_void, marker::PhantomData};
 
-    impl Resamp<O, H, S> {
-        fn drop_fn(&mut self) {
-            unsafe {
-                let _ = sys::resamp_cccf_destroy(self.q as Q);
-            }
-        }
+            impl Resamp<$O, $H, $S> {
+                fn drop_fn(&mut self) {
+                    unsafe {
+                        let _ = $destroy_fn(self.q as $Q);
+                    }
+                }
 
-        /// See [resamp_cfcf_create_default](https://liquidsdr.org/api/resamp_crcf/#create_default).
-        pub fn create_default(rate: f32) -> Result<Resamp<O, H, S>, String> {
-            let q = unsafe { sys::resamp_cccf_create_default(rate) as *mut c_void };
-            if q.is_null() {
-                return Err("error".into());
-            }
-            let drop_fn = Self::drop_fn;
-            let _sample_type = PhantomData;
-            let _tap_type = PhantomData;
-            let _output_type = PhantomData;
+                #[doc = concat!("See [resamp_", stringify!($mod), "_create_default](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#create_default).")]
+                pub fn create_default(rate: f32) -> Result<Resamp<$O, $H, $S>, String> {
+                    let q = unsafe { $create_default_fn(rate) as *mut c_void };
+                    if q.is_null() {
+                        return Err("error".into());
+                    }
+                    let drop_fn = Self::drop_fn;
+                    let _sample_type = PhantomData;
+                    let _tap_type = PhantomData;
+                    let _output_type = PhantomData;
 
-            Ok(Self {
-                q,
-                rate,
-                drop_fn,
-                _sample_type,
-                _tap_type,
-                _output_type,
-            })
-        }
+                    Ok(Self {
+                        q,
+                        rate,
+                        drop_fn,
+                        _sample_type,
+                        _tap_type,
+                        _output_type,
+                    })
+                }
 
-        /// See [resamp_crcf_create](https://liquidsdr.org/api/resamp_crcf/#create).
-        pub fn create(
-            rate: f32,
-            m: u32,
-            fc: f32,
-            as_: f32,
-            npfb: u32,
-        ) -> Result<Resamp<O, H, S>, String> {
-            let q = unsafe { sys::resamp_cccf_create(rate, m, fc, as_, npfb) as *mut c_void };
-            if q.is_null() {
-                return Err("error".into());
-            }
-            let drop_fn = Self::drop_fn;
-            let _sample_type = PhantomData;
-            let _tap_type = PhantomData;
-            let _output_type = PhantomData;
+                #[doc = concat!("See [resamp_", stringify!($mod), "_create](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#create).")]
+                pub fn create(
+                    rate: f32,
+                    m: u32,
+                    fc: f32,
+                    as_: f32,
+                    npfb: u32,
+                ) -> Result<Resamp<$O, $H, $S>, String> {
+                    let q = unsafe { $create_fn(rate, m, fc, as_, npfb) as *mut c_void };
+                    if q.is_null() {
+                        return Err("error".into());
+                    }
+                    let drop_fn = Self::drop_fn;
+                    let _sample_type = PhantomData;
+                    let _tap_type = PhantomData;
+                    let _output_type = PhantomData;
 
-            Ok(Self {
-                q,
-                rate,
-                drop_fn,
-                _sample_type,
-                _tap_type,
-                _output_type,
-            })
-        }
+                    Ok(Self {
+                        q,
+                        rate,
+                        drop_fn,
+                        _sample_type,
+                        _tap_type,
+                        _output_type,
+                    })
+                }
 
-        /// Returns this filter's resample ratio.
-        pub fn rate(&self) -> f32 {
-            self.rate
-        }
+                /// Returns this filter's resample ratio.
+                pub fn rate(&self) -> f32 {
+                    self.rate
+                }
 
-        pub fn execute(&mut self, x: S, y: &mut [O]) -> Result<usize, String> {
-            let mut num_written: std::os::raw::c_uint = 0;
-            assert!(y.len() >= self.rate.ceil() as usize);
-            let err = unsafe {
-                sys::resamp_cccf_execute(
-                    self.q as Q,
-                    c(x),
-                    y.as_mut_ptr() as *mut _,
-                    &mut num_written as *mut _,
-                )
-            };
-            if err != sys::liquid_error_code_LIQUID_OK as i32 {
-                Err("error".into())
-            } else {
-                Ok(num_written as usize)
-            }
-        }
-    }
-}
-
-mod crc {
-    use super::*;
-    type O = Complex32;
-    type H = f32;
-    type S = Complex32;
-    type Q = sys::resamp_crcf;
-
-    impl Resamp<O, H, S> {
-        fn drop_fn(&mut self) {
-            unsafe {
-                let _ = sys::resamp_crcf_destroy(self.q as Q);
-            }
-        }
-
-        /// See [resamp_cfcf_create_default](https://liquidsdr.org/api/resamp_cfcf/#create_default).
-        pub fn create_default(rate: f32) -> Result<Resamp<O, H, S>, String> {
-            let q = unsafe { sys::resamp_crcf_create_default(rate) as *mut c_void };
-            if q.is_null() {
-                return Err("error".into());
-            }
-            let drop_fn = Self::drop_fn;
-            let _sample_type = PhantomData;
-            let _tap_type = PhantomData;
-            let _output_type = PhantomData;
-
-            Ok(Self {
-                q,
-                rate,
-                drop_fn,
-                _sample_type,
-                _tap_type,
-                _output_type,
-            })
-        }
-
-        /// See [resamp_crcf_create](https://liquidsdr.org/api/resamp_crcf/#create).
-        pub fn create(
-            rate: f32,
-            m: u32,
-            fc: f32,
-            as_: f32,
-            npfb: u32,
-        ) -> Result<Resamp<O, H, S>, String> {
-            let q = unsafe { sys::resamp_crcf_create(rate, m, fc, as_, npfb) as *mut c_void };
-            if q.is_null() {
-                return Err("error".into());
-            }
-            let drop_fn = Self::drop_fn;
-            let _sample_type = PhantomData;
-            let _tap_type = PhantomData;
-            let _output_type = PhantomData;
-
-            Ok(Self {
-                q,
-                rate,
-                drop_fn,
-                _sample_type,
-                _tap_type,
-                _output_type,
-            })
-        }
-
-        /// Returns this filter's resample ratio.
-        ///
-        /// See [resamp_crcf_get_rate](https://liquidsdr.org/api/resamp_crcf/#get_rate).
-        pub fn rate(&self) -> f32 {
-            self.rate
-        }
-
-        pub fn execute(&mut self, x: S, y: &mut [O]) -> Result<usize, String> {
-            let mut num_written: std::os::raw::c_uint = 0;
-            assert!(y.len() >= self.rate.ceil() as usize);
-            let err = unsafe {
-                sys::resamp_crcf_execute(
-                    self.q as Q,
-                    c(x),
-                    y.as_mut_ptr() as *mut _,
-                    &mut num_written as *mut _,
-                )
-            };
-            if err != sys::liquid_error_code_LIQUID_OK as i32 {
-                Err("error".into())
-            } else {
-                Ok(num_written as usize)
+                pub fn execute(&mut self, x: $S, y: &mut [$O]) -> Result<usize, String> {
+                    let mut num_written: std::os::raw::c_uint = 0;
+                    assert!(y.len() >= self.rate.ceil() as usize);
+                    let x = $complex_conv(x);
+                    let err = unsafe {
+                        $exec_fn(
+                            self.q as $Q,
+                            x,
+                            y.as_mut_ptr() as *mut _,
+                            &mut num_written as *mut _,
+                        )
+                    };
+                    if err != sys::liquid_error_code_LIQUID_OK as i32 {
+                        Err("error".into())
+                    } else {
+                        Ok(num_written as usize)
+                    }
+                }
             }
         }
     }
-}
+);
 
-mod rrr {
-    use super::*;
-    type O = f32;
-    type S = f32;
-    type H = f32;
-    type Q = sys::resamp_rrrf;
+impl_resamp!(
+    mod_: cccf,
+    alias: ResampCCC,
+    out: Complex32,
+    taps: Complex32,
+    input: Complex32,
+    cobj: sys::resamp_cccf,
+    complex_conv: crate::complex::c,
+    create_default_fn: sys::resamp_cccf_create_default,
+    create_fn: sys::resamp_cccf_create,
+    destroy_fn: sys::resamp_cccf_destroy,
+    exec_fn: sys::resamp_cccf_execute
+);
 
-    impl Resamp<O, H, S> {
-        fn drop_fn(&mut self) {
-            unsafe {
-                let _ = sys::resamp_rrrf_destroy(self.q as Q);
-            }
-        }
+impl_resamp!(
+    mod_: crcf,
+    alias: ResampCRC,
+    out: Complex32,
+    taps: f32,
+    input: Complex32,
+    cobj: sys::resamp_crcf,
+    complex_conv: crate::complex::c,
+    create_default_fn: sys::resamp_crcf_create_default,
+    create_fn: sys::resamp_crcf_create,
+    destroy_fn: sys::resamp_crcf_destroy,
+    exec_fn: sys::resamp_crcf_execute
+);
 
-        /// See [resamp_rrrf_create_default](https://liquidsdr.org/api/resamp_rrrf/#create_default).
-        pub fn create_default(rate: f32) -> Result<Resamp<O, H, S>, String> {
-            let q = unsafe { sys::resamp_rrrf_create_default(rate) as *mut c_void };
-            if q.is_null() {
-                return Err("error".into());
-            }
-            let drop_fn = Self::drop_fn;
-            let _sample_type = PhantomData;
-            let _tap_type = PhantomData;
-            let _output_type = PhantomData;
-
-            Ok(Self {
-                q,
-                rate,
-                drop_fn,
-                _sample_type,
-                _tap_type,
-                _output_type,
-            })
-        }
-
-        /// See [resamp_rrrf_create](https://liquidsdr.org/api/resamp_rrrf/#create).
-        pub fn create(
-            rate: f32,
-            m: u32,
-            fc: f32,
-            as_: f32,
-            npfb: u32,
-        ) -> Result<Resamp<O, H, S>, String> {
-            let q = unsafe { sys::resamp_rrrf_create(rate, m, fc, as_, npfb) as *mut c_void };
-            if q.is_null() {
-                return Err("error".into());
-            }
-            let drop_fn = Self::drop_fn;
-            let _sample_type = PhantomData;
-            let _tap_type = PhantomData;
-            let _output_type = PhantomData;
-
-            Ok(Self {
-                q,
-                rate,
-                drop_fn,
-                _sample_type,
-                _tap_type,
-                _output_type,
-            })
-        }
-
-        /// Returns this filter's resample ratio.
-        pub fn rate(&self) -> f32 {
-            self.rate
-        }
-
-        pub fn execute(&mut self, x: S, y: &mut [O]) -> Result<usize, String> {
-            let mut num_written: std::os::raw::c_uint = 0;
-            assert!(y.len() >= self.rate.ceil() as usize);
-            let err = unsafe {
-                sys::resamp_rrrf_execute(self.q as Q, x, y.as_mut_ptr(), &mut num_written as *mut _)
-            };
-            if err != sys::liquid_error_code_LIQUID_OK as i32 {
-                Err("error".into())
-            } else {
-                Ok(num_written as usize)
-            }
-        }
-    }
-}
+impl_resamp!(
+    mod_: rrrf,
+    alias: ResampRRR,
+    out: f32,
+    taps: f32,
+    input: f32,
+    cobj: sys::resamp_rrrf,
+    complex_conv: crate::complex::ident,
+    create_default_fn: sys::resamp_rrrf_create_default,
+    create_fn: sys::resamp_rrrf_create,
+    destroy_fn: sys::resamp_rrrf_destroy,
+    exec_fn: sys::resamp_rrrf_execute
+);
 
 #[cfg(test)]
 mod tests {
@@ -305,7 +191,6 @@ mod tests {
             y.extend(&yy[..n]);
         }
         assert_eq!(y.len(), 315);
-        dbg!(y);
     }
 
     #[test]
@@ -322,7 +207,6 @@ mod tests {
             y.extend(&yy[..n]);
         }
         assert_eq!(y.len(), 315);
-        dbg!(y);
     }
 
     #[test]
@@ -339,6 +223,5 @@ mod tests {
             y.extend(&yy[..n]);
         }
         assert_eq!(y.len(), 315);
-        dbg!(y);
     }
 }
