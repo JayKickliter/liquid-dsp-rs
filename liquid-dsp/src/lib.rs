@@ -2,4 +2,4 @@
 
 mod complex;
 
-pub mod filt;
+pub mod filter;

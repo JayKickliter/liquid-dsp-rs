@@ -16,23 +16,10 @@ impl<O, H, S> Drop for Resamp<O, H, S> {
     }
 }
 
-/// - output: Complex32
-/// - taps: Complex32
-/// - input: Complex32
-pub type ResampCCC = Resamp<Complex32, Complex32, Complex32>;
-/// - output: Complex32
-/// - taps: f32
-/// - input: Complex32
-pub type ResampCRC = Resamp<Complex32, f32, Complex32>;
-/// - output: f32
-/// - taps: f32
-/// - input: f32
-pub type ResampRRR = Resamp<f32, f32, f32>;
-
 macro_rules! impl_resamp(
     (
         mod_: $mod:ident,
-        alias: $resamp_alias:ty,
+        alias: $resamp_alias:ident,
         out: $O:ty,
         taps: $H:ty,
         input: $S:ty,
@@ -43,8 +30,13 @@ macro_rules! impl_resamp(
         destroy_fn: $destroy_fn:path,
         exec_fn: $exec_fn:path
     ) => {
+        #[doc = concat!("- output: ", stringify!($O))]
+        #[doc = concat!("- taps: ", stringify!($H))]
+        #[doc = concat!("- input: ", stringify!($S))]
+        pub type $resamp_alias = Resamp<$O, $H, $S>;
+
         mod $mod {
-            use crate::{filt::resamp::Resamp};
+            use crate::{filter::resamp::Resamp};
             #[allow(unused_imports)]
             use ::num_complex::Complex32;
             use ::liquid_dsp_sys as sys;
