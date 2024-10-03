@@ -57,7 +57,7 @@ macro_rules! impl_resamp(
                     }
                 }
 
-                fn clone_fnn(&self) -> Self {
+                fn clone_fn(&self) -> Self {
                     let q = unsafe {$copy_fn(self.q as $Q) as *mut c_void};
                     Self {
                         q,
@@ -70,6 +70,18 @@ macro_rules! impl_resamp(
                     }
                 }
 
+                /// Create arbitrary resampler object with a specified
+                /// input resampling rate and default parameters. This
+                /// is a simplified method to provide a basic
+                /// resampler with a baseline set of parameters,
+                /// abstracting away some of the complexities with the
+                /// filterbank design. The default parameters are
+                ///
+                /// - `m`: 7 (filter semi-length)
+                /// - `fc`: `min(0.49, _rate/2)` (filter cutoff frequency)
+                /// - `sa`: 60 dB (filter stop-band attenuation)
+                /// - `npfb`: 64 (number of filters in the bank)
+                ///
                 #[doc = concat!("See [resamp_", stringify!($mod), "_create_default](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#create_default).")]
                 pub fn create_default(rate: f32) -> Result<Self, String> {
                     let q = unsafe { $create_default_fn(rate) as *mut c_void };
@@ -77,7 +89,7 @@ macro_rules! impl_resamp(
                         return Err("error".into());
                     }
                     let drop_fn = Self::drop_fn;
-                    let clone_fn = Self::clone_fnn;
+                    let clone_fn = Self::clone_fn;
                     let _sample_type = PhantomData;
                     let _tap_type = PhantomData;
                     let _output_type = PhantomData;
@@ -93,19 +105,28 @@ macro_rules! impl_resamp(
                     })
                 }
 
+                /// Create arbitrary resampler object from filter
+                /// prototype.
+                ///
+                /// - `rate`: arbitrary resampling rate, `0 < rate`
+                /// - `m`: filter semi-length (delay), `0 < m`
+                /// - `fc`: filter cutoff frequency, `0 < fc < 0.5`
+                /// - `sa`: filter stop-band attenuation (dB), `0 < sa`
+                /// - `npfb`: number of filters in the bank, `0 < npfb`
+                ///
                 #[doc = concat!("See [resamp_", stringify!($mod), "_create](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#create).")]
                 pub fn create(
                     rate: f32,
                     m: u32,
                     fc: f32,
-                    as_: f32,
+                    sa: f32,
                     npfb: u32,
                 ) -> Result<Self, String> {
-                    let q = unsafe { $create_fn(rate, m, fc, as_, npfb) as *mut c_void };
+                    let q = unsafe { $create_fn(rate, m, fc, sa, npfb) as *mut c_void };
                     if q.is_null() {
                         return Err("error".into());
                     }
-                    let clone_fn = Self::clone_fnn;
+                    let clone_fn = Self::clone_fn;
                     let drop_fn = Self::drop_fn;
                     let _sample_type = PhantomData;
                     let _tap_type = PhantomData;
