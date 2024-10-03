@@ -44,11 +44,11 @@ macro_rules! impl_resamp(
         pub type $resamp_alias = Resamp<$O, $H, $S>;
 
         mod $mod {
-            use crate::{filter::resamp::Resamp};
+            use crate::{ErrorKind, error::PassThrough, filter::resamp::Resamp};
             #[allow(unused_imports)]
             use ::num_complex::Complex32;
             use ::liquid_dsp_sys as sys;
-            use ::std::{ffi::c_void, marker::PhantomData};
+            use ::std::{ffi::c_void, marker::PhantomData, convert::TryFrom};
 
             impl Resamp<$O, $H, $S> {
                 fn drop_fn(&mut self) {
@@ -83,10 +83,10 @@ macro_rules! impl_resamp(
                 /// - `npfb`: 64 (number of filters in the bank)
                 ///
                 #[doc = concat!("See [resamp_", stringify!($mod), "_create_default](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#create_default).")]
-                pub fn create_default(rate: f32) -> Result<Self, String> {
+                pub fn create_default(rate: f32) -> Result<Self, ErrorKind> {
                     let q = unsafe { $create_default_fn(rate) as *mut c_void };
                     if q.is_null() {
-                        return Err("error".into());
+                        return Err(ErrorKind::Input);
                     }
                     let drop_fn = Self::drop_fn;
                     let clone_fn = Self::clone_fn;
@@ -121,10 +121,10 @@ macro_rules! impl_resamp(
                     fc: f32,
                     sa: f32,
                     npfb: u32,
-                ) -> Result<Self, String> {
+                ) -> Result<Self, ErrorKind> {
                     let q = unsafe { $create_fn(rate, m, fc, sa, npfb) as *mut c_void };
                     if q.is_null() {
-                        return Err("error".into());
+                        return Err(ErrorKind::Input);
                     }
                     let clone_fn = Self::clone_fn;
                     let drop_fn = Self::drop_fn;
@@ -148,7 +148,7 @@ macro_rules! impl_resamp(
                     self.rate
                 }
 
-                pub fn execute(&mut self, x: $S, y: &mut [$O]) -> Result<usize, String> {
+                pub fn execute(&mut self, x: $S, y: &mut [$O]) -> Result<usize, ErrorKind> {
                     let mut num_written: std::os::raw::c_uint = 0;
                     assert!(y.len() >= self.rate.ceil() as usize);
                     let x = $complex_conv(x);
@@ -160,11 +160,8 @@ macro_rules! impl_resamp(
                             &mut num_written as *mut _,
                         )
                     };
-                    if err != sys::liquid_error_code_LIQUID_OK as i32 {
-                        Err("error".into())
-                    } else {
-                        Ok(num_written as usize)
-                    }
+                    let _ = PassThrough::try_from(err)?;
+                    Ok(num_written as usize)
                 }
             }
         }

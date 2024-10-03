@@ -6,3 +6,4 @@ version = "0.1.0"
 [dependencies]
 liquid-dsp-sys = { path = "../liquid-dsp-sys" }
 num-complex    = "0"
+thiserror      = "1"
