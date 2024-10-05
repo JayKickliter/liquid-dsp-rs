@@ -36,7 +36,8 @@ macro_rules! impl_resamp(
         create_default_fn: $create_default_fn:path,
         create_fn: $create_fn:path,
         destroy_fn: $destroy_fn:path,
-        exec_fn: $exec_fn:path
+        exec_fn: $exec_fn:path,
+        exec_block_fn: $exec_block_fn:path
     ) => {
         #[doc = concat!("- output: ", stringify!($O))]
         #[doc = concat!("- taps: ", stringify!($H))]
@@ -48,7 +49,7 @@ macro_rules! impl_resamp(
             #[allow(unused_imports)]
             use ::num_complex::Complex32;
             use ::liquid_dsp_sys as sys;
-            use ::std::{ffi::c_void, marker::PhantomData, convert::TryFrom};
+            use ::std::{ffi::{c_void, c_uint}, marker::PhantomData, convert::TryFrom};
 
             impl Resamp<$O, $H, $S> {
                 fn drop_fn(&mut self) {
@@ -148,9 +149,24 @@ macro_rules! impl_resamp(
                     self.rate
                 }
 
+                /// Execute arbitrary resampler on a single input
+                /// sample and store the resulting samples in the
+                /// output array. The number of output samples depends
+                /// upon the resampling rate but will be at most ⌈r⌉
+                /// samples.
+                ///
+                /// - `x`: single input sample
+                /// - `y`: output sample slice
+                ///
+                /// Returns the number of output samples written to `y`, or an error.
+                ///
+                #[doc = concat!("See [resamp_", stringify!($mod), "_execute](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#execute).")]
                 pub fn execute(&mut self, x: $S, y: &mut [$O]) -> Result<usize, ErrorKind> {
-                    let mut num_written: std::os::raw::c_uint = 0;
-                    assert!(y.len() >= self.rate.ceil() as usize);
+                    if y.len() < self.rate.ceil() as usize {
+                        return Err(ErrorKind::Range)
+                    }
+
+                    let mut num_written: c_uint = 0;
                     let x = $complex_conv(x);
                     let err = unsafe {
                         $exec_fn(
@@ -163,6 +179,37 @@ macro_rules! impl_resamp(
                     let _ = PassThrough::try_from(err)?;
                     Ok(num_written as usize)
                 }
+
+                /// Execute arbitrary resampler on a block of input samples and store
+                /// the resulting samples in the output array. The number of output
+                /// samples depends upon the resampling rate and the number of input
+                /// samples but will be at most ⌈rnx⌉ samples.
+                ///
+                /// - x: input slice
+                /// - y: output sample slice
+                ///
+                /// Returns the number of output samples written to `y`, or an error.
+                ///
+                #[doc = concat!("See [resamp_", stringify!($mod), "_execute_block](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#execute_block).")]
+                pub fn execute_block(&mut self, x: &[$S], y: &mut [$O]) -> Result<usize, ErrorKind> {
+                    if y.len() < (self.rate * x.len() as c_uint as f32).ceil() as usize {
+                        return Err(ErrorKind::Range)
+                    }
+
+                    let mut num_written: c_uint = 0;
+                    let err = unsafe {
+                        $exec_block_fn(
+                            self.q as $Q,
+                            x.as_ptr() as *mut _,
+                            x.len() as c_uint,
+                            y.as_mut_ptr() as *mut _,
+                            &mut num_written as *mut _,
+                        )
+                    };
+                    let _ = PassThrough::try_from(err)?;
+                    Ok(num_written as usize)
+                }
+
             }
         }
     }
@@ -180,7 +227,8 @@ impl_resamp!(
     create_default_fn: sys::resamp_cccf_create_default,
     create_fn: sys::resamp_cccf_create,
     destroy_fn: sys::resamp_cccf_destroy,
-    exec_fn: sys::resamp_cccf_execute
+    exec_fn: sys::resamp_cccf_execute,
+    exec_block_fn: sys::resamp_cccf_execute_block
 );
 
 impl_resamp!(
@@ -195,7 +243,8 @@ impl_resamp!(
     create_default_fn: sys::resamp_crcf_create_default,
     create_fn: sys::resamp_crcf_create,
     destroy_fn: sys::resamp_crcf_destroy,
-    exec_fn: sys::resamp_crcf_execute
+    exec_fn: sys::resamp_crcf_execute,
+    exec_block_fn: sys::resamp_crcf_execute_block
 );
 
 impl_resamp!(
@@ -210,7 +259,8 @@ impl_resamp!(
     create_default_fn: sys::resamp_rrrf_create_default,
     create_fn: sys::resamp_rrrf_create,
     destroy_fn: sys::resamp_rrrf_destroy,
-    exec_fn: sys::resamp_rrrf_execute
+    exec_fn: sys::resamp_rrrf_execute,
+    exec_block_fn: sys::resamp_rrrf_execute_block
 );
 
 #[cfg(test)]
