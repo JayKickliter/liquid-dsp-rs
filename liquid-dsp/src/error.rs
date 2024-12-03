@@ -2,6 +2,7 @@ use liquid_dsp_sys as sys;
 use thiserror::Error;
 
 /// A liquid-dsp error with possible context.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Error {
     kind: ErrorKind,
     context: Option<String>,
@@ -70,13 +71,6 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub(crate) fn err(self) -> Error {
-        Error {
-            kind: self,
-            context: None,
-        }
-    }
-
     pub(crate) fn err_with_ctx(self, context: impl Into<String>) -> Error {
         Error {
             kind: self,
