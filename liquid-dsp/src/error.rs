@@ -1,6 +1,12 @@
 use liquid_dsp_sys as sys;
 use thiserror::Error;
 
+/// A liquid-dsp error with possible context.
+pub struct Error {
+    kind: ErrorKind,
+    context: Option<String>,
+}
+
 /// Error values returned from libliquid itself.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
@@ -61,6 +67,22 @@ pub enum ErrorKind {
     ///  - could not parse line in file (improper formatting)
     #[error("file IO error")]
     Io,
+}
+
+impl ErrorKind {
+    pub(crate) fn err(self) -> Error {
+        Error {
+            kind: self,
+            context: None,
+        }
+    }
+
+    pub(crate) fn err_with_ctx(self, context: impl Into<String>) -> Error {
+        Error {
+            kind: self,
+            context: Some(context.into()),
+        }
+    }
 }
 
 #[allow(dead_code)]

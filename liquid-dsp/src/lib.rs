@@ -4,4 +4,4 @@ mod complex;
 mod error;
 
 pub mod filter;
-pub use error::ErrorKind;
+pub use error::{Error, ErrorKind};

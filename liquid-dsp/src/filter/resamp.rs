@@ -45,7 +45,7 @@ macro_rules! impl_resamp(
         pub type $resamp_alias = Resamp<$O, $H, $S>;
 
         mod $mod {
-            use crate::{ErrorKind, error::PassThrough, filter::resamp::Resamp};
+            use crate::{Error, ErrorKind, error::PassThrough, filter::resamp::Resamp};
             #[allow(unused_imports)]
             use ::num_complex::Complex32;
             use ::liquid_dsp_sys as sys;
@@ -84,10 +84,10 @@ macro_rules! impl_resamp(
                 /// - `npfb`: 64 (number of filters in the bank)
                 ///
                 #[doc = concat!("See [resamp_", stringify!($mod), "_create_default](https://liquidsdr.org/api/resamp_", stringify!($mod), "/#create_default).")]
-                pub fn create_default(rate: f32) -> Result<Self, ErrorKind> {
+                pub fn create_default(rate: f32) -> Result<Self, Error> {
                     let q = unsafe { $create_default_fn(rate) as *mut c_void };
                     if q.is_null() {
-                        return Err(ErrorKind::Input);
+                        return Err(ErrorKind::Input.err_with_ctx(concat!("resamp_", stringify!($mod), "create_default returned NULL")));
                     }
                     let drop_fn = Self::drop_fn;
                     let clone_fn = Self::clone_fn;
