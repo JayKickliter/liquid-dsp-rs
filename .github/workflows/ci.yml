@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['*']
+
+jobs:
+  rust:
+    runs-on: ${{matrix.os}}
+    permissions:
+      actions: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-latest
+
+    steps:
+      - name: Setup | Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.11.0
+
+      - name: Setup | Install Dependencies (Linux)
+        run: sudo apt-get install libliquid-dev
+        if: matrix.os == 'ubuntu-24.04'
+
+      - name: Setup | Install Dependencies (macOS)
+        run: brew install liquid-dsp
+        if: matrix.os == 'macos-latest'
+
+      - name: Setup | Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup | Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Setup | Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build | Test
+        run: cargo test
+
+      - name: Hygiene | Formatting
+        run: cargo fmt -- --check
+
+      - name: Hygiene | Clippy
+        run: cargo clippy --all-targets --all-features -- -Dwarnings -Dclippy::all

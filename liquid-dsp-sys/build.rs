@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf};
 
 fn main() {
+    println!("cargo:rustc-link-search=/opt/homebrew/lib");
     println!("cargo:rustc-link-lib=liquid");
 
     let bindings = bindgen::Builder::default()
